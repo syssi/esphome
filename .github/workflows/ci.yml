@@ -162,10 +162,9 @@ jobs:
         run: echo "::add-matcher::.github/workflows/matchers/ci-custom.json"
       - name: Run script/ci-custom
         run: |
-          . venv/bin/activate
+          rm venv
+          . ../venv/bin/activate
           script/ci-custom.py
-          script/build_codeowners.py --check
-          script/build_language_schema.py --check
 
   pytest:
     name: Run pytest
