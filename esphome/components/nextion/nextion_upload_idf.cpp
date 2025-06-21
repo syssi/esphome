@@ -3,14 +3,14 @@
 #ifdef USE_NEXTION_TFT_UPLOAD
 #ifdef USE_ESP_IDF
 
-#include "esphome/core/application.h"
-#include "esphome/core/defines.h"
-#include "esphome/core/util.h"
-#include "esphome/core/log.h"
-#include "esphome/components/network/util.h"
-#include <cinttypes>
 #include <esp_heap_caps.h>
 #include <esp_http_client.h>
+#include <cinttypes>
+#include "esphome/components/network/util.h"
+#include "esphome/core/application.h"
+#include "esphome/core/defines.h"
+#include "esphome/core/log.h"
+#include "esphome/core/util.h"
 
 namespace esphome {
 namespace nextion {
@@ -51,7 +51,7 @@ int Nextion::upload_by_chunks_(esp_http_client_handle_t http_client, uint32_t &r
   }
 
   // Allocate the buffer dynamically
-  ExternalRAMAllocator<uint8_t> allocator(ExternalRAMAllocator<uint8_t>::ALLOW_FAILURE);
+  RAMAllocator<uint8_t> allocator;
   uint8_t *buffer = allocator.allocate(4096);
   if (!buffer) {
     ESP_LOGE(TAG, "Buffer alloc failed");
@@ -333,30 +333,6 @@ bool Nextion::upload_tft(uint32_t baud_rate, bool exit_reparse) {
   esp_http_client_cleanup(http_client);
   ESP_LOGV(TAG, "Connection closed");
   return this->upload_end_(true);
-}
-
-bool Nextion::upload_end_(bool successful) {
-  ESP_LOGD(TAG, "TFT upload done: %s", YESNO(successful));
-
-  if (successful) {
-    ESP_LOGD(TAG, "Restart");
-    delay(1500);  // NOLINT
-    App.safe_reboot();
-  } else {
-    ESP_LOGE(TAG, "TFT upload failed");
-
-    this->is_updating_ = false;
-    this->ignore_is_setup_ = false;
-
-    uint32_t baud_rate = this->parent_->get_baud_rate();
-    if (baud_rate != this->original_baud_rate_) {
-      ESP_LOGD(TAG, "Baud back: %" PRIu32 "->%" PRIu32, baud_rate, this->original_baud_rate_);
-      this->parent_->set_baud_rate(this->original_baud_rate_);
-      this->parent_->load_settings();
-    }
-  }
-
-  return successful;
 }
 
 }  // namespace nextion
