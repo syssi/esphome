@@ -3,6 +3,10 @@
 #include "esphome/core/version.h"
 #include "esphome/core/hal.h"
 #include <algorithm>
+#include <ranges>
+#ifdef USE_RUNTIME_STATS
+#include "esphome/components/runtime_stats/runtime_stats.h"
+#endif
 
 #ifdef USE_STATUS_LED
 #include "esphome/components/status_led/status_led.h"
@@ -67,7 +71,7 @@ void Application::setup() {
 
     do {
       uint8_t new_app_state = STATUS_LED_WARNING;
-      this->scheduler.call();
+      this->scheduler.call(millis());
       this->feed_wdt();
       for (uint32_t j = 0; j <= i; j++) {
         // Update loop_component_start_time_ right before calling each component
@@ -83,16 +87,20 @@ void Application::setup() {
   }
 
   ESP_LOGI(TAG, "setup() finished successfully!");
+
+  // Clear setup priority overrides to free memory
+  clear_setup_priority_overrides();
+
   this->schedule_dump_config();
   this->calculate_looping_components_();
 }
 void Application::loop() {
   uint8_t new_app_state = 0;
 
-  this->scheduler.call();
-
   // Get the initial loop time at the start
   uint32_t last_op_end_time = millis();
+
+  this->scheduler.call(last_op_end_time);
 
   // Feed WDT with time
   this->feed_wdt(last_op_end_time);
@@ -136,6 +144,14 @@ void Application::loop() {
   this->in_loop_ = false;
   this->app_state_ = new_app_state;
 
+#ifdef USE_RUNTIME_STATS
+  // Process any pending runtime stats printing after all components have run
+  // This ensures stats printing doesn't affect component timing measurements
+  if (global_runtime_stats != nullptr) {
+    global_runtime_stats->process_pending_stats(last_op_end_time);
+  }
+#endif
+
   // Use the last component's end time instead of calling millis() again
   auto elapsed = last_op_end_time - this->last_loop_;
   if (elapsed >= this->loop_interval_ || HighFrequencyLoopRequester::is_high_frequency()) {
@@ -144,7 +160,7 @@ void Application::loop() {
     this->yield_with_select_(0);
   } else {
     uint32_t delay_time = this->loop_interval_ - elapsed;
-    uint32_t next_schedule = this->scheduler.next_schedule_in().value_or(delay_time);
+    uint32_t next_schedule = this->scheduler.next_schedule_in(last_op_end_time).value_or(delay_time);
     // next_schedule is max 0.5*delay_time
     // otherwise interval=0 schedules result in constant looping with almost no sleep
     next_schedule = std::max(next_schedule, delay_time / 2);
@@ -184,8 +200,8 @@ void IRAM_ATTR HOT Application::feed_wdt(uint32_t time) {
 }
 void Application::reboot() {
   ESP_LOGI(TAG, "Forcing a reboot");
-  for (auto it = this->components_.rbegin(); it != this->components_.rend(); ++it) {
-    (*it)->on_shutdown();
+  for (auto &component : std::ranges::reverse_view(this->components_)) {
+    component->on_shutdown();
   }
   arch_restart();
 }
@@ -198,17 +214,17 @@ void Application::safe_reboot() {
 }
 
 void Application::run_safe_shutdown_hooks() {
-  for (auto it = this->components_.rbegin(); it != this->components_.rend(); ++it) {
-    (*it)->on_safe_shutdown();
+  for (auto &component : std::ranges::reverse_view(this->components_)) {
+    component->on_safe_shutdown();
   }
-  for (auto it = this->components_.rbegin(); it != this->components_.rend(); ++it) {
-    (*it)->on_shutdown();
+  for (auto &component : std::ranges::reverse_view(this->components_)) {
+    component->on_shutdown();
   }
 }
 
 void Application::run_powerdown_hooks() {
-  for (auto it = this->components_.rbegin(); it != this->components_.rend(); ++it) {
-    (*it)->on_powerdown();
+  for (auto &component : std::ranges::reverse_view(this->components_)) {
+    component->on_powerdown();
   }
 }
 
@@ -257,6 +273,17 @@ void Application::teardown_components(uint32_t timeout_ms) {
 }
 
 void Application::calculate_looping_components_() {
+  // Count total components that need looping
+  size_t total_looping = 0;
+  for (auto *obj : this->components_) {
+    if (obj->has_overridden_loop()) {
+      total_looping++;
+    }
+  }
+
+  // Pre-reserve vector to avoid reallocations
+  this->looping_components_.reserve(total_looping);
+
   // First add all active components
   for (auto *obj : this->components_) {
     if (obj->has_overridden_loop() &&
@@ -293,6 +320,12 @@ void Application::disable_component_loop_(Component *component) {
         if (this->in_loop_ && i == this->current_loop_index_) {
           // Decrement so we'll process the swapped component next
           this->current_loop_index_--;
+          // Update the loop start time to current time so the swapped component
+          // gets correct timing instead of inheriting stale timing.
+          // This prevents integer underflow in timing calculations by ensuring
+          // the swapped component starts with a fresh timing reference, avoiding
+          // errors caused by stale or wrapped timing values.
+          this->loop_component_start_time_ = millis();
         }
       }
       return;
@@ -364,7 +397,7 @@ void Application::enable_pending_loops_() {
 
     // Clear the pending flag and enable the loop
     component->pending_enable_loop_ = false;
-    ESP_LOGD(TAG, "%s loop enabled from ISR", component->get_component_source());
+    ESP_LOGVV(TAG, "%s loop enabled from ISR", component->get_component_source());
     component->component_state_ &= ~COMPONENT_STATE_MASK;
     component->component_state_ |= COMPONENT_STATE_LOOP;
 
