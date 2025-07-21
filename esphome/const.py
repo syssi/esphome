@@ -35,6 +35,14 @@ class Framework(StrEnum):
     ZEPHYR = "zephyr"
 
 
+class CoreModel(StrEnum):
+    """Core model identifiers for ESPHome scheduler."""
+
+    SINGLE = "ESPHOME_CORES_SINGLE"
+    MULTI_NO_ATOMICS = "ESPHOME_CORES_MULTI_NO_ATOMICS"
+    MULTI_ATOMICS = "ESPHOME_CORES_MULTI_ATOMICS"
+
+
 class PlatformFramework(Enum):
     """Combined platform-framework identifiers with tuple values."""
 
@@ -96,6 +104,7 @@ CONF_ALL = "all"
 CONF_ALLOW_OTHER_USES = "allow_other_uses"
 CONF_ALPHA = "alpha"
 CONF_ALTITUDE = "altitude"
+CONF_ALTITUDE_COMPENSATION = "altitude_compensation"
 CONF_AMBIENT_LIGHT = "ambient_light"
 CONF_AMBIENT_PRESSURE_COMPENSATION = "ambient_pressure_compensation"
 CONF_AMBIENT_PRESSURE_COMPENSATION_SOURCE = "ambient_pressure_compensation_source"
@@ -374,6 +383,8 @@ CONF_FINGER_ID = "finger_id"
 CONF_FINGERPRINT_COUNT = "fingerprint_count"
 CONF_FLASH_LENGTH = "flash_length"
 CONF_FLASH_TRANSITION_LENGTH = "flash_transition_length"
+CONF_FLIP_X = "flip_x"
+CONF_FLIP_Y = "flip_y"
 CONF_FLOW = "flow"
 CONF_FLOW_CONTROL_PIN = "flow_control_pin"
 CONF_FONT = "font"
@@ -921,6 +932,7 @@ CONF_SWING_MODE_COMMAND_TOPIC = "swing_mode_command_topic"
 CONF_SWING_MODE_STATE_TOPIC = "swing_mode_state_topic"
 CONF_SWING_OFF_ACTION = "swing_off_action"
 CONF_SWING_VERTICAL_ACTION = "swing_vertical_action"
+CONF_SWITCH = "switch"
 CONF_SWITCH_DATAPOINT = "switch_datapoint"
 CONF_SWITCHES = "switches"
 CONF_SYNC = "sync"

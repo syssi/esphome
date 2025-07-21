@@ -268,10 +268,10 @@ std::string WebServer::get_config_json() {
   return json::build_json([this](JsonObject root) {
     root["title"] = App.get_friendly_name().empty() ? App.get_name() : App.get_friendly_name();
     root["comment"] = App.get_comment();
-#ifdef USE_WEBSERVER_OTA
-    root["ota"] = true;  // web_server OTA platform is configured
+#if defined(USE_WEBSERVER_OTA_DISABLED) || !defined(USE_WEBSERVER_OTA)
+    root["ota"] = false;  // Note: USE_WEBSERVER_OTA_DISABLED only affects web_server, not captive_portal
 #else
-    root["ota"] = false;
+    root["ota"] = true;
 #endif
     root["log"] = this->expose_log_;
     root["lang"] = "en";
@@ -1620,7 +1620,9 @@ void WebServer::handle_event_request(AsyncWebServerRequest *request, const UrlMa
   request->send(404);
 }
 
-static std::string get_event_type(event::Event *event) { return event->last_event_type ? *event->last_event_type : ""; }
+static std::string get_event_type(event::Event *event) {
+  return (event && event->last_event_type) ? *event->last_event_type : "";
+}
 
 std::string WebServer::event_state_json_generator(WebServer *web_server, void *source) {
   auto *event = static_cast<event::Event *>(source);
